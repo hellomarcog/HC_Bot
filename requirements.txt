@@ -1,0 +1,4 @@
+playwright
+anthropic
+pyyaml
+python-dotenv

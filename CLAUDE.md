@@ -33,6 +33,17 @@ A disclosed bot account that reads posts on Reddit and X and replies to them in 
 - **Reply generation**: Claude API, with the persona above encoded as a system prompt. Keep the persona definition in one place (e.g. `persona/system_prompt.md`) that both the code and future edits can reference, rather than duplicating persona text across files.
 - **Autonomy model**: runs autonomously (no per-reply human approval) but inside the guardrails above. Log every action (what it saw, what it decided, what it posted) somewhere reviewable — this is "autonomous with limits," not "fire and forget with no visibility."
 
+## Setup
+
+```
+pip install -r requirements.txt
+playwright install chromium
+cp .env.example .env   # fill in ANTHROPIC_API_KEY
+python -m src.browser reddit https://old.reddit.com/login
+```
+
+The last command opens a real browser window for a one-time manual Reddit login; log in by hand, then press Enter in the terminal to save the session to `data/reddit_storage_state.json` (gitignored — it's equivalent to a credential). After that, `python main.py` runs the watch/decide/generate/reply loop against `config/config.yaml`.
+
 ## Working conventions
 
 - Don't add platforms, subreddits, or accounts to the active scope without the user explicitly naming them — scope grows by instruction, not by assumption.

@@ -1,0 +1,32 @@
+platforms:
+  reddit:
+    subreddits:
+      - hardcore
+    daily_reply_cap: 15
+    poll_interval_seconds:
+      min: 180
+      max: 600
+    reply_delay_seconds:
+      min: 20
+      max: 180
+  x:
+    enabled: false
+    accounts: []
+    keywords: []
+    daily_reply_cap: 10
+
+keywords:
+  interests:
+    - hardcore
+    - deathcore
+    - hummus
+    - golden girls
+    - empty nest
+    - golden palace
+
+guardrails:
+  no_private_individuals: true
+  avoid_topics:
+    - politics
+    - tragedy
+    - current events
