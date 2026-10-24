@@ -2,3 +2,4 @@ playwright
 anthropic
 pyyaml
 python-dotenv
+tweepy

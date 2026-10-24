@@ -23,26 +23,28 @@ A disclosed bot account that reads posts on Reddit and X and replies to them in 
 ## Platform scope
 
 - **Reddit**: starting with r/hardcore only. More subreddits to be added later — don't hardcode assumptions that r/hardcore is the only one; keep the subreddit list configurable.
-- **X**: no accounts/hashtags defined yet. Leave the watch-list empty/configurable rather than guessing targets.
+- **X**: current focus. No specific accounts to watch yet — discovery is keyword-based (search across X, not a fixed account list) using the shared `keywords.interests` list in config. Narrow to specific accounts later only if the user names them.
 
 ## Technical approach
 
 - **Language**: Python.
-- **Browser automation**: Playwright (or Selenium if a specific need arises) driving a real logged-in browser session on both Reddit and X, to get human-like pacing, scrolling, and timing — not the official REST APIs.
-  - Note: X's Automation Rules formally expect disclosed bots to post via their official API even when browser-driven pacing is used elsewhere; we're accepting that gray area knowingly for this project. Don't "fix" this unilaterally by switching X to API-only without checking with the user first.
-- **Reply generation**: Claude API, with the persona above encoded as a system prompt. Keep the persona definition in one place (e.g. `persona/system_prompt.md`) that both the code and future edits can reference, rather than duplicating persona text across files.
+- **Browser automation**: Playwright driving a real logged-in browser session, used for *reading* content on both Reddit and X (human-like pacing, scrolling, timing).
+- **X posting goes through the official API, not the browser.** X API access is Free tier, which has no read/search endpoints — so X is a hybrid: Playwright finds candidate posts via search, but replies are published via the official API (`src/x_api.py`, using Tweepy with OAuth 1.0a user-context auth). This satisfies X's Automation Rules expectation that disclosed bots post through the API, while keeping discovery free. Don't silently move X posting back to browser automation, and don't silently add Reddit's API either — these are deliberate per-platform choices.
+- **Reply generation**: Claude API, with the persona above encoded as a system prompt. Keep the persona definition in one place (`persona/system_prompt.md`) that both the code and future edits reference, rather than duplicating persona text across files. `src/generate.py` is shared across platforms — pass a plain-language source description (e.g. "r/hardcore on Reddit", "X (Twitter)") rather than hardcoding one platform's framing.
 - **Autonomy model**: runs autonomously (no per-reply human approval) but inside the guardrails above. Log every action (what it saw, what it decided, what it posted) somewhere reviewable — this is "autonomous with limits," not "fire and forget with no visibility."
+- **Shared vs. platform-specific code**: `decide.py` (should-reply logic), `act.py` (pause + post + record), `generate.py` (reply generation), and `state.py` are platform-agnostic — they take a `platform` string and work the same way for Reddit and X. Keep new platforms plugging into these rather than forking them.
 
 ## Setup
 
 ```
 pip install -r requirements.txt
 playwright install chromium
-cp .env.example .env   # fill in ANTHROPIC_API_KEY
+cp .env.example .env   # fill in ANTHROPIC_API_KEY and, for X, the X_* API keys from developer.x.com
 python -m src.browser reddit https://old.reddit.com/login
+python -m src.browser x https://x.com/login
 ```
 
-The last command opens a real browser window for a one-time manual Reddit login; log in by hand, then press Enter in the terminal to save the session to `data/reddit_storage_state.json` (gitignored — it's equivalent to a credential). After that, `python main.py` runs the watch/decide/generate/reply loop against `config/config.yaml`.
+Both login commands open a real browser window for a one-time manual login; log in by hand, then press Enter in the terminal to save the session (gitignored — equivalent to a credential). After that: `python main.py` runs the Reddit loop, `python main_x.py` runs the X loop (search via browser, reply via API).
 
 ## Working conventions
 

@@ -10,10 +10,15 @@ platforms:
       min: 20
       max: 180
   x:
-    enabled: false
+    enabled: true
     accounts: []
-    keywords: []
     daily_reply_cap: 10
+    poll_interval_seconds:
+      min: 180
+      max: 600
+    reply_delay_seconds:
+      min: 20
+      max: 180
 
 keywords:
   interests:

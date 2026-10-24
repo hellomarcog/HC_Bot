@@ -24,10 +24,12 @@ def run_once(page, config: dict) -> None:
     for subreddit in reddit_cfg["subreddits"]:
         for post in reddit.fetch_new_posts(page, subreddit):
             text = f"{post.title}\n{post.selftext}"
-            if not decide.should_reply(post.id, text, config):
+            if not decide.should_reply("reddit", post.id, text, config):
                 continue
-            reply_text = generate.generate_reply(post.title, post.selftext)
-            act.post_and_record(page, "reddit", post.id, post.permalink, reply_text)
+            reply_text = generate.generate_reply(f"r/{subreddit} on Reddit", text)
+            act.post_and_record(
+                "reddit", post.id, reply_text, lambda t: reddit.post_reply(page, post.permalink, t)
+            )
             time.sleep(random.uniform(*_delay_range(reddit_cfg["reply_delay_seconds"])))
 
 

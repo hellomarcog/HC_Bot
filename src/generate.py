@@ -15,8 +15,7 @@ _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 _persona = PERSONA_PATH.read_text()
 
 
-def generate_reply(title: str, body: str) -> str:
-    post_text = f"Title: {title}\n\n{body}".strip()
+def generate_reply(source_description: str, post_text: str) -> str:
     response = _client.messages.create(
         model=MODEL,
         max_tokens=300,
@@ -24,7 +23,7 @@ def generate_reply(title: str, body: str) -> str:
         messages=[
             {
                 "role": "user",
-                "content": f"Here's a Reddit post in r/hardcore:\n\n{post_text}\n\nWrite your reply.",
+                "content": f"Here's a post from {source_description}:\n\n{post_text.strip()}\n\nWrite your reply.",
             }
         ],
     )

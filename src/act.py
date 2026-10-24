@@ -1,12 +1,13 @@
-"""Posts a reply with a human-like pause before typing, then records it in state."""
+"""Posts a reply with a human-like pause beforehand, then records it in state. Platform-agnostic."""
 
 import random
 import time
+from typing import Callable
 
-from . import reddit, state
+from . import state
 
 
-def post_and_record(page, platform: str, post_id: str, permalink: str, reply_text: str) -> None:
-    time.sleep(random.uniform(2, 8))  # pause before "typing", like a human reading the post first
-    reddit.post_reply(page, permalink, reply_text)
+def post_and_record(platform: str, post_id: str, reply_text: str, post_fn: Callable[[str], None]) -> None:
+    time.sleep(random.uniform(2, 8))  # pause before posting, like a human reading first
+    post_fn(reply_text)
     state.record_reply(platform, post_id)
