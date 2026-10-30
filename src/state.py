@@ -28,6 +28,24 @@ def daily_count(platform: str) -> int:
     return data["daily_counts"].get(key, 0)
 
 
+def daily_post_count(platform: str) -> int:
+    """Original posts today (counted separately from replies)."""
+    key = f"{platform}:posts:{date.today().isoformat()}"
+    return _load()["daily_counts"].get(key, 0)
+
+
+def recent_posts(platform: str, n: int = 20) -> list[str]:
+    return _load().get("posts", {}).get(platform, [])[-n:]
+
+
+def record_post(platform: str, text: str) -> None:
+    data = _load()
+    data.setdefault("posts", {}).setdefault(platform, []).append(text)
+    key = f"{platform}:posts:{date.today().isoformat()}"
+    data["daily_counts"][key] = data["daily_counts"].get(key, 0) + 1
+    _save(data)
+
+
 def record_reply(platform: str, post_id: str) -> None:
     data = _load()
     data["replied_ids"].append(post_id)

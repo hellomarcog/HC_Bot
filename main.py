@@ -27,6 +27,8 @@ def run_once(page, config: dict) -> None:
             if not decide.should_reply("reddit", post.id, text, config):
                 continue
             reply_text = generate.generate_reply(f"r/{subreddit} on Reddit", text)
+            if reply_text is None:
+                continue
             act.post_and_record(
                 "reddit", post.id, reply_text, lambda t: reddit.post_reply(page, post.permalink, t)
             )

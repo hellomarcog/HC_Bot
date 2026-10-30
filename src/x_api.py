@@ -19,3 +19,8 @@ _client = tweepy.Client(
 
 def post_reply(tweet_id: str, reply_text: str) -> None:
     _client.create_tweet(text=reply_text, in_reply_to_tweet_id=tweet_id)
+
+
+def post(text: str) -> str:
+    """Publishes an original post; returns its id."""
+    return str(_client.create_tweet(text=text).data["id"])

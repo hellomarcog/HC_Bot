@@ -12,6 +12,55 @@ platforms:
   x:
     enabled: true
     accounts: []
+    # X-specific search/relevance terms (overrides keywords.interests for X). Bare "hardcore"
+    # is left out on purpose: on X it mostly matches porn spam, not music.
+    keywords:
+      - hardcore band
+      - hardcore music
+      - hardcore show
+      - hxc
+      - deathcore
+      - hummus
+      - golden girls
+      - empty nest
+      - golden palace
+    search_filters: "lang:en"
+    # X's limit for non-Premium accounts. Replies over this are dropped, never posted.
+    max_reply_chars: 280
+    # Original posts (main_x.py). X allows automated posts for entertainment via the API;
+    # keyword-search auto-replies are NOT allowed (see X Automation Rules), so no reply loop here.
+    posts:
+      daily_post_cap: 2  # hard stop, separate from the reply cap. Conservative start.
+      # Each day the bot picks how many posts to make (random within this range) and when,
+      # like a person who posts on their lunch break and in the evening. Some days it skips.
+      posts_per_day: {min: 1, max: 2}
+      skip_day_chance: 0.2  # ~1 day in 5 with no posts at all
+      timezone: America/New_York
+      windows:  # local times when posts can go out
+        - {start: "12:00", end: "13:30"}
+        - {start: "18:30", end: "23:00"}
+      min_gap_minutes: 150  # at least this long between two posts on the same day
+      # Hashtags per post, picked at random from this list (0 = none, like a lot of real posts).
+      hashtag_counts: [0, 1, 1, 2]
+      # Each post picks one topic at random. Hashtags are chosen in code (not by the model),
+      # from that topic's list only. No #hardcore: on X it's overwhelmingly porn.
+      # No trending/event hashtags — automated posting about trending topics is against X rules.
+      topics:
+        - name: hardcore
+          prompt: a strong, specific take on hardcore punk — name real bands, records, or scene history and say why they matter
+          hashtags: ["#hxc", "#hardcorepunk", "#hardcoremusic"]
+        - name: deathcore
+          prompt: a dismissive, specific take on deathcore or trend-chasing in heavy music — mock the genre and trends, not individual fans
+          hashtags: ["#deathcore", "#hxc", "#metal"]
+        - name: debate
+          prompt: a pointed question or hot take about hardcore or metal designed to get people arguing in the replies
+          hashtags: ["#hxc", "#hardcorepunk", "#metal"]
+        - name: hummus
+          prompt: a hummus opinion — what makes it real, what's an abomination, how people get it wrong
+          hashtags: ["#hummus", "#foodie"]
+        - name: golden girls
+          prompt: a Golden Girls (or Empty Nest / Golden Palace) take, favorite moment, or bit of trivia you're certain is accurate
+          hashtags: ["#GoldenGirls", "#ThankYouForBeingAFriend"]
     daily_reply_cap: 10
     poll_interval_seconds:
       min: 180
@@ -35,3 +84,26 @@ guardrails:
     - politics
     - tragedy
     - current events
+  # Skip any post containing one of these (case-insensitive, whole words/phrases plus plurals,
+  # so "trump" won't block "trumpet" but also won't catch "trumpism" — list variants separately).
+  blocked_words:
+    - israel
+    - israeli
+    - palestine
+    - palestinian
+    - gaza
+    - hamas
+    - zionist
+    - antisemitism
+    - antisemitic
+    - trump
+    - maga
+    - biden
+    - harris
+    - democrat
+    - republican
+    - election
+    - nazi
+    - passed away
+    - rest in peace
+    - condolences
