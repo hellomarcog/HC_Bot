@@ -27,6 +27,7 @@ CONFIG_PATH = "config/config.yaml"
 POST_LOG = Path("logs/x_posts.jsonl")
 DRY_RUN_POSTS = 3
 LENGTH_WEIGHTS = {"short": 3, "medium": 4, "long": 2}
+MAX_LATENESS = timedelta(minutes=30)  # skip a slot rather than post this long after it
 
 
 def load_config() -> dict:
@@ -171,11 +172,24 @@ def main() -> None:
         print(f"{now:%a %b %d}: " + (", ".join(f"{t:%-I:%M %p}" for t in plan) or "no posts"))
         _log({"plan": [t.isoformat(timespec="minutes") for t in plan]})
         for when in plan:
-            time.sleep(max(0, (when - datetime.now(tz)).total_seconds()))
+            _sleep_until(when, tz)
+            late = datetime.now(tz) - when
+            if late > MAX_LATENESS:
+                # Computer was asleep/suspended past the slot; don't post at an odd hour.
+                print(f"skipped {when:%-I:%M %p} slot — {late} late (computer asleep?)")
+                _log({"posted": False, "skipped": f"missed {when.isoformat(timespec='minutes')} slot, {late} late"})
+                continue
             last_topic = post_once(config, last_topic) or last_topic
-        # Sleep until a random few minutes after midnight, then plan the next day.
+        # Wait until a random few minutes after midnight, then plan the next day.
         tomorrow = datetime.combine(now.date() + timedelta(days=1), datetime.min.time(), tz)
-        time.sleep(max(0, (tomorrow - datetime.now(tz)).total_seconds()) + random.uniform(60, 1800))
+        _sleep_until(tomorrow + timedelta(seconds=random.uniform(60, 1800)), tz)
+
+
+def _sleep_until(when: datetime, tz: ZoneInfo) -> None:
+    """Sleep in short steps against the wall clock. One long time.sleep() doesn't count time the
+    computer spends suspended, so after waking it would oversleep by however long it was asleep."""
+    while (remaining := (when - datetime.now(tz)).total_seconds()) > 0:
+        time.sleep(min(remaining, 60))
 
 
 if __name__ == "__main__":
