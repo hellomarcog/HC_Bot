@@ -1,0 +1,18 @@
+# systemd user service for the X posting loop. Install (see CLAUDE.md "Running in the background"):
+#   cp deploy/hc-bot-x.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now hc-bot-x.service
+#   loginctl enable-linger "$USER"   # keep running when logged out, and start at boot
+[Unit]
+Description=HC_Bot X posting loop (@SuburbanDscipln)
+After=network-online.target
+
+[Service]
+WorkingDirectory=/home/marcogiampaolo/Projects/HC_Bot
+# -u: unbuffered, so printed lines show up in the journal immediately
+ExecStart=/home/marcogiampaolo/Projects/HC_Bot/.venv/bin/python -u main_x.py
+# Restart after a crash, but wait 5 minutes so a persistent error can't loop rapidly
+Restart=on-failure
+RestartSec=300
+
+[Install]
+WantedBy=default.target

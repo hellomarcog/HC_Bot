@@ -54,6 +54,19 @@ python -m src.browser reddit https://old.reddit.com/login
 
 The Reddit login command opens a real browser window for a one-time manual login; log in by hand, then press Enter in the terminal to save the session (gitignored — equivalent to a credential). After that: `python main.py` runs the Reddit loop, and `python main_x.py` runs the X posting loop (API only, no login needed). `python main_x.py --dry-run` shows a sample week's schedule and a few generated posts without posting anything; everything the X loop does is logged to `logs/x_posts.jsonl`.
 
+### Running in the background
+
+The X loop runs as a systemd user service (`deploy/hc-bot-x.service`) so it survives logouts and restarts. Install once with the commands at the top of that file. Day to day:
+
+```
+systemctl --user status hc-bot-x      # is it running? shows the latest output
+journalctl --user -u hc-bot-x -f      # watch its output live (Ctrl+C stops watching, not the bot)
+systemctl --user restart hc-bot-x     # after changing code or config
+systemctl --user stop hc-bot-x        # stop posting
+```
+
+Don't also run `python main_x.py` in a terminal while the service is running — that's two bots.
+
 ## Working conventions
 
 - Don't add platforms, subreddits, or accounts to the active scope without the user explicitly naming them — scope grows by instruction, not by assumption.
