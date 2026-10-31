@@ -61,6 +61,18 @@ platforms:
         - name: golden girls
           prompt: a Golden Girls (or Empty Nest / Golden Palace) take, favorite moment, or bit of trivia you're certain is accurate
           hashtags: ["#GoldenGirls", "#ThankYouForBeingAFriend"]
+        # scheduled_only: never picked at random — only used by a special_days slot.
+        - name: halloween
+          scheduled_only: true
+          prompt: a Halloween post in character — horror punk vs. real hardcore, the worst costume you see at shows, handing out something better than candy, or the Golden Girls — only facts you're certain of
+          # No #Halloween: it trends on the day, and automated posts on trending topics break X rules.
+          hashtags: ["#hxc", "#horrorpunk"]
+      # Fixed post times for specific dates (replaces the random plan that day; cap still
+      # applies). topic: a topic name from above, or leave it out for a random one.
+      special_days:
+        "2026-10-31":
+          - {time: "10:17"}
+          - {time: "15:42", topic: halloween}
       # Photo posts: an AI-generated "selfie" of the character plus a caption (src/images.py).
       # Each scheduled post has `chance` of being a selfie instead of text-only (if the reference
       # image exists and OPENAI_API_KEY is set). Selfies count toward daily_post_cap like any post.

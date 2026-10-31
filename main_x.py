@@ -75,6 +75,19 @@ def plan_day(posts_cfg: dict, day: date) -> list[datetime]:
     return times[:1]  # couldn't fit them all with the gap; post once instead
 
 
+def special_day(posts_cfg: dict, day: date) -> list[tuple[datetime, str | None]] | None:
+    """Fixed (time, topic) slots for `day` from `special_days` in config, or None if it's a normal
+    day. These replace the random plan for that day (no skip-day roll); the cap still applies."""
+    days = {str(k): v for k, v in (posts_cfg.get("special_days") or {}).items()}
+    if day.isoformat() not in days:
+        return None
+    tz = ZoneInfo(posts_cfg["timezone"])
+    return [
+        (datetime.combine(day, datetime.strptime(slot["time"], "%H:%M").time(), tz), slot.get("topic"))
+        for slot in days[day.isoformat()]
+    ]
+
+
 def _rejection(text: str, recent: list[str], config: dict) -> str | None:
     """Why this post must not go out, or None if it's fine. Simple checks, easy to tune."""
     if "@" in text:
@@ -91,12 +104,19 @@ def _rejection(text: str, recent: list[str], config: dict) -> str | None:
 
 
 def make_post(
-    config: dict, recent: list[str], last_topic: str | None = None
+    config: dict, recent: list[str], last_topic: str | None = None, topic_name: str | None = None
 ) -> tuple[str, str] | tuple[None, str]:
-    """Returns (post text with hashtags, topic name), or (None, reason) if nothing usable."""
+    """Returns (post text with hashtags, topic name), or (None, reason) if nothing usable.
+    `topic_name` forces a topic; otherwise one is picked at random (never a scheduled_only one)."""
     x_cfg = config["platforms"]["x"]
     posts_cfg = x_cfg["posts"]
-    topics = [t for t in posts_cfg["topics"] if t["name"] != last_topic] or posts_cfg["topics"]
+    if topic_name:
+        topics = [t for t in posts_cfg["topics"] if t["name"] == topic_name]
+        if not topics:
+            return None, f"no topic named {topic_name!r}"
+    else:
+        pool = [t for t in posts_cfg["topics"] if not t.get("scheduled_only")]
+        topics = [t for t in pool if t["name"] != last_topic] or pool
     topic = random.choice(topics)
     n_tags = min(random.choice(posts_cfg["hashtag_counts"]), len(topic["hashtags"]))
     tags = random.sample(topic["hashtags"], k=n_tags)
@@ -184,16 +204,20 @@ def _publish(post: dict) -> str | None:
     return post_id
 
 
-def post_once(config: dict, last_topic: str | None, selfie_scene: str | None = None) -> str | None:
+def post_once(
+    config: dict, last_topic: str | None, selfie_scene: str | None = None, topic: str | None = None
+) -> str | None:
     """Makes and publishes one post, unless the daily cap is hit. Returns the topic posted.
-    Sometimes (selfies.chance) it's a selfie; `selfie_scene` forces one ("" = any scene)."""
+    Sometimes (selfies.chance) it's a selfie; `selfie_scene` forces one ("" = any scene).
+    `topic` forces a text post on that topic (special_days)."""
     posts_cfg = config["platforms"]["x"]["posts"]
     if state.daily_post_count("x") >= posts_cfg["daily_post_cap"]:
         print("daily post cap reached")
         return None
     recent = state.recent_posts("x")
     selfie_cfg = posts_cfg.get("selfies", {})
-    if selfie_scene is not None or (selfies_ready(selfie_cfg) and random.random() < selfie_cfg["chance"]):
+    roll_selfie = topic is None and selfies_ready(selfie_cfg) and random.random() < selfie_cfg["chance"]
+    if selfie_scene is not None or roll_selfie:
         post, reason = make_selfie_post(config, recent, selfie_scene or None)
         if post:
             return post["topic"] if _publish(post) else None
@@ -201,7 +225,7 @@ def post_once(config: dict, last_topic: str | None, selfie_scene: str | None = N
         _log({"posted": False, "skipped": reason})
         if selfie_scene is not None:
             return None  # asked for a selfie specifically; don't swap in a text post
-    text, topic_or_reason = make_post(config, recent, last_topic)
+    text, topic_or_reason = make_post(config, recent, last_topic, topic)
     if text is None:
         print(f"skipped — {topic_or_reason}")
         _log({"posted": False, "skipped": topic_or_reason})
@@ -216,8 +240,8 @@ def dry_run(config: dict) -> None:
     print("Sample schedule (re-rolled each run):")
     for i in range(7):
         day = today + timedelta(days=i)
-        times = plan_day(posts_cfg, day)
-        print(f"  {day:%a %b %d}: " + (", ".join(f"{t:%-I:%M %p}" for t in times) or "no posts"))
+        plan = special_day(posts_cfg, day) or [(t, None) for t in plan_day(posts_cfg, day)]
+        print(f"  {day:%a %b %d}: " + (", ".join(f"{t:%-I:%M %p}" + (f" ({topic})" if topic else "") for t, topic in plan) or "no posts"))
     print()
     recent = list(state.recent_posts("x"))
     last_topic = None
@@ -280,12 +304,15 @@ def main() -> None:
     while True:
         now = datetime.now(tz)
         # Plan today; times already past (e.g. after a restart) are dropped, not made up.
-        plan = [t for t in plan_day(posts_cfg, now.date()) if t > now]
+        plan = special_day(posts_cfg, now.date())
+        if plan is None:
+            plan = [(t, None) for t in plan_day(posts_cfg, now.date())]
+        plan = [(t, topic) for t, topic in plan if t > now]
         if state.daily_post_count("x") > 0:
             plan = []  # restarted on a day that already has a post (e.g. a manual one); leave it there
-        print(f"{now:%a %b %d}: " + (", ".join(f"{t:%-I:%M %p}" for t in plan) or "no posts"))
-        _log({"plan": [t.isoformat(timespec="minutes") for t in plan]})
-        for when in plan:
+        print(f"{now:%a %b %d}: " + (", ".join(f"{t:%-I:%M %p}" + (f" ({topic})" if topic else "") for t, topic in plan) or "no posts"))
+        _log({"plan": [[t.isoformat(timespec="minutes"), topic] for t, topic in plan]})
+        for when, topic in plan:
             _sleep_until(when, tz)
             late = datetime.now(tz) - when
             if late > MAX_LATENESS:
@@ -293,7 +320,7 @@ def main() -> None:
                 print(f"skipped {when:%-I:%M %p} slot — {late} late (computer asleep?)")
                 _log({"posted": False, "skipped": f"missed {when.isoformat(timespec='minutes')} slot, {late} late"})
                 continue
-            last_topic = post_once(config, last_topic) or last_topic
+            last_topic = post_once(config, last_topic, topic=topic) or last_topic
         # Wait until a random few minutes after midnight, then plan the next day.
         tomorrow = datetime.combine(now.date() + timedelta(days=1), datetime.min.time(), tz)
         _sleep_until(tomorrow + timedelta(seconds=random.uniform(60, 1800)), tz)
