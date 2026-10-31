@@ -24,6 +24,7 @@ A disclosed bot account with a distinct, opinionated personality, acting at a hu
 
 - **Reddit**: starting with r/hardcore only. More subreddits to be added later — don't hardcode assumptions that r/hardcore is the only one; keep the subreddit list configurable.
 - **X**: current focus, **original posts only** — the bot posts its own takes on a conservative, randomized schedule (`platforms.x.posts` in config: topics, hashtags, windows, cap). It does not read X, search X, reply, mention, or follow. Following is done by hand from `docs/follow_list.md`.
+- **X selfies**: some scheduled posts are AI-generated photorealistic "selfies" of the character (OpenAI Images API, `src/images.py`, config `platforms.x.posts.selfies`), edited from one reference portrait so the face stays consistent. The visible AI marker in post text (`selfies.label`) was turned off by the user's explicit decision on 2026-10-30; image alt text still says "AI-generated photo" and the profile bio still discloses the bot — keep both. Image prompts come from config scenes, never the model, and must not depict real people, logos, or band art.
 
 ## X rules (from X's Automation Rules, April 2026 — reviewed with the user 2026-10-29)
 
@@ -48,7 +49,8 @@ A disclosed bot account with a distinct, opinionated personality, acting at a hu
 python -m venv .venv && source .venv/bin/activate   # system python doesn't have the deps
 pip install -r requirements.txt
 playwright install chromium
-cp .env.example .env   # fill in ANTHROPIC_API_KEY and, for X, the X_* API keys from developer.x.com
+cp .env.example .env   # fill in ANTHROPIC_API_KEY, the X_* API keys from developer.x.com, and
+                       # OPENAI_API_KEY (platform.openai.com, for selfies; a ChatGPT plan doesn't include API access)
 python -m src.browser reddit https://old.reddit.com/login
 ```
 

@@ -3,3 +3,4 @@ anthropic
 pyyaml
 python-dotenv
 tweepy
+openai

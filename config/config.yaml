@@ -61,6 +61,48 @@ platforms:
         - name: golden girls
           prompt: a Golden Girls (or Empty Nest / Golden Palace) take, favorite moment, or bit of trivia you're certain is accurate
           hashtags: ["#GoldenGirls", "#ThankYouForBeingAFriend"]
+      # Photo posts: an AI-generated "selfie" of the character plus a caption (src/images.py).
+      # Each scheduled post has `chance` of being a selfie instead of text-only (if the reference
+      # image exists and OPENAI_API_KEY is set). Selfies count toward daily_post_cap like any post.
+      selfies:
+        enabled: true
+        chance: 0.15  # ~1 post in 7. Each image costs money on the OpenAI API.
+        # Text added to every image post to mark the photo as AI ("" = none). The user chose no
+        # label on 2026-10-30; the alt text and the bot bio still say it's AI. See CLAUDE.md.
+        label: ""
+        model: gpt-image-2.5-flare  # check platform.openai.com for current image model names
+        size: 1024x1536  # portrait, like a phone selfie
+        quality: medium  # low / medium / high — higher costs more
+        reference_image: data/images/reference.jpg  # make with: python main_x.py --make-reference
+        # What the character looks like. Edit freely, then re-make the reference.
+        character: >-
+          a man in his mid-40s from the East Coast, stocky build, short salt-and-pepper beard,
+          slightly receding hair, faded black t-shirt with no visible logo, the tired confident
+          look of someone who has been going to basement shows since 1994
+        # Scene = what the photo shows (image_prompt) and what the caption riffs on (caption).
+        # Keep image prompts free of real people, brands, logos, and band names.
+        scenes:
+          - name: hummus aisle
+            image_prompt: standing in a supermarket refrigerated aisle, holding a plastic tub of store-brand hummus at arm's length with a skeptical, unimpressed look, harsh fluorescent lighting, shelves of dips behind him
+            caption: you're in the grocery store judging the hummus selection, and it's bad — a snarky line about what you're looking at
+            hashtags: ["#hummus", "#foodie"]
+          - name: hummus from scratch
+            pov: true  # first-person shot of his counter, no face
+            image_prompt: looking down at a cluttered home kitchen counter while making hummus from scratch, his own hands scraping a lumpy, imperfect batch out of an old food processor with a spatula, an opened can of chickpeas, a tahini jar with no readable label, squeezed lemon halves, garlic peels and a crumpled paper towel, dirty dishes at the edge of frame, harsh overhead kitchen light, slightly blurry and crooked like a quick unplanned snap
+            caption: you're making hummus from scratch at home — the post must include the phrase "keeping it real, keeping it street" and be about homemade with real tahini versus sad store-bought tubs
+            hashtags: ["#hummus", "#foodie"]
+          - name: basement show
+            image_prompt: in a crowded, dimly lit basement before a punk show, arms crossed, cinderblock walls, a small amp and a mic stand behind him, nobody else's face visible
+            caption: you're at a small local hardcore show — a line about why this beats any arena or fest
+            hashtags: ["#hxc", "#hardcorepunk"]
+          - name: record bin
+            image_prompt: flipping through a crate of used vinyl records at a cramped record store, holding one up with a smug look, record covers blurred so nothing is readable
+            caption: you're digging through used records — a line about the find, or about what kids are buying instead
+            hashtags: ["#hxc", "#vinyl"]
+          - name: golden girls night
+            image_prompt: on a living room couch with a slice of cheesecake on a plate, an old TV in the background showing an out-of-focus pastel 1980s sitcom living room, cozy lamp light
+            caption: it's your Golden Girls night with cheesecake — a line about the show, and only trivia you're certain of
+            hashtags: ["#GoldenGirls"]
     daily_reply_cap: 10
     poll_interval_seconds:
       min: 180
