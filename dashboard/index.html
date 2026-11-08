@@ -4,12 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Bot Monitor</title>
-<!--
-  Status dashboard for the HC_Bot X account. data.json is encrypted (AES-256-GCM, key from
-  PBKDF2-SHA256 over the password); this page decrypts it in the browser. Nothing readable is
-  published without the password. Built by src/dashboard.py in the HC_Bot repo.
--->
+<title>Sign in</title>
 <style>
   :root {
     --bg: #f6f5f2; --card: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e4e2dc;
@@ -57,9 +52,10 @@
   .topic { display: grid; grid-template-columns: 110px 1fr 28px; gap: 8px; align-items: center; margin: 4px 0; font-size: 14px; }
   .topic .track { background: var(--line); border-radius: 4px; height: 10px; }
   .topic .fill { background: var(--bar); height: 10px; border-radius: 4px; }
-  form { max-width: 360px; margin: 18vh auto 0; }
+  form { max-width: 360px; margin: 25vh auto 0; }
   input[type=password] { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line);
     background: var(--card); color: var(--ink); font-size: 16px; margin: 10px 0; }
+  form button { width: 100%; }
   button { padding: 9px 14px; border-radius: 8px; border: 0; background: var(--accent); color: #fff;
     font-weight: 600; font-size: 15px; cursor: pointer; }
   button.link { background: none; color: var(--muted); padding: 0; font-weight: 400; font-size: 13px; text-decoration: underline; }
@@ -71,9 +67,7 @@
 <body>
 <main>
   <form id="login" hidden>
-    <h1>Bot Monitor</h1>
-    <p class="muted">Enter the dashboard password.</p>
-    <input id="pw" type="password" autocomplete="current-password" autofocus>
+    <input id="pw" type="password" placeholder="Password" aria-label="Password" autocomplete="current-password" autofocus>
     <label class="muted"><input id="remember" type="checkbox"> Remember on this device</label>
     <p class="error" id="err"></p>
     <button type="submit">Unlock</button>
