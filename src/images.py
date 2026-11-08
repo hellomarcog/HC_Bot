@@ -70,7 +70,6 @@ def make_selfie(cfg: dict, scene_prompt: str, out_path: Path, pov: bool = False)
             model=cfg["model"],
             image=[ref],
             prompt=prompt,
-            input_fidelity="high",  # keep the reference face
             size=cfg["size"],
             quality=cfg["quality"],
             output_format="jpeg",

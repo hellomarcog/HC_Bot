@@ -36,6 +36,8 @@ IMAGE_DIR = Path("data/images/posts")
 DRY_RUN_POSTS = 3
 LENGTH_WEIGHTS = {"short": 3, "medium": 4, "long": 2}
 MAX_LATENESS = timedelta(minutes=30)  # skip a slot rather than post this long after it
+RETRIES = 3  # attempts per slot when an API can't be reached (e.g. Wi-Fi/DNS drops)
+RETRY_DELAY = timedelta(minutes=5)
 
 
 def load_config() -> dict:
@@ -320,10 +322,24 @@ def main() -> None:
                 print(f"skipped {when:%-I:%M %p} slot — {late} late (computer asleep?)")
                 _log({"posted": False, "skipped": f"missed {when.isoformat(timespec='minutes')} slot, {late} late"})
                 continue
-            last_topic = post_once(config, last_topic, topic=topic) or last_topic
+            last_topic = _post_with_retry(config, last_topic, topic) or last_topic
         # Wait until a random few minutes after midnight, then plan the next day.
         tomorrow = datetime.combine(now.date() + timedelta(days=1), datetime.min.time(), tz)
         _sleep_until(tomorrow + timedelta(seconds=random.uniform(60, 1800)), tz)
+
+
+def _post_with_retry(config: dict, last_topic: str | None, topic: str | None) -> str | None:
+    """post_once, but a network error (Claude/OpenAI/X unreachable) retries a few times and then
+    skips the slot instead of crashing the bot — a crash restarts it with a new plan for the day."""
+    for attempt in range(1, RETRIES + 1):
+        try:
+            return post_once(config, last_topic, topic=topic)
+        except Exception as e:  # X refusals are already handled inside post_once
+            print(f"post attempt {attempt}/{RETRIES} failed: {type(e).__name__}: {e}")
+            _log({"posted": False, "failed": f"attempt {attempt}: {type(e).__name__}: {e}"})
+            if attempt < RETRIES:
+                time.sleep(RETRY_DELAY.total_seconds())
+    return None
 
 
 def _sleep_until(when: datetime, tz: ZoneInfo) -> None:

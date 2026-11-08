@@ -73,6 +73,8 @@ platforms:
         "2026-10-31":
           - {time: "10:17"}
           - {time: "15:42", topic: halloween}
+        "2026-11-07":  # keep tonight's slot across the restart for the retry fix
+          - {time: "22:27"}
       # Photo posts: an AI-generated "selfie" of the character plus a caption (src/images.py).
       # Each scheduled post has `chance` of being a selfie instead of text-only (if the reference
       # image exists and OPENAI_API_KEY is set). Selfies count toward daily_post_cap like any post.
