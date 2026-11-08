@@ -167,11 +167,18 @@ def publish() -> None:
         # init rather than clone: every push replaces the remote's contents anyway.
         _git("init", "-q", "-b", "main")
         _git("remote", "add", "origin", REPO_URL)
+        # Same commit identity as the HC_Bot repo (it's set there locally, not globally).
+        for field in ("user.name", "user.email"):
+            value = subprocess.run(["git", "-C", str(ROOT), "config", field], capture_output=True, text=True)
+            if value.stdout.strip():
+                _git("config", field, value.stdout.strip())
     _git("add", "-A")
     has_commit = _git("rev-parse", "--verify", "HEAD").returncode == 0
     message = f"Dashboard update {datetime.now():%Y-%m-%d %H:%M}"
     commit = ["commit", "-q", "-m", message] + (["--amend"] if has_commit else [])
-    _git(*commit)
+    r = _git(*commit)
+    if r.returncode:
+        sys.exit(f"commit failed: {(r.stderr or r.stdout).strip()}")
     r = _git("push", "-q", "--force", "origin", "HEAD:main")
     if r.returncode:
         sys.exit(f"push failed: {r.stderr.strip()}")
