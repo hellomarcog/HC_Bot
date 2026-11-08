@@ -1,0 +1,10 @@
+# Every 15 minutes: rebuild the encrypted dashboard and push it to GitHub Pages.
+[Unit]
+Description=Update the HC_Bot dashboard every 15 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+
+[Install]
+WantedBy=timers.target

@@ -69,6 +69,10 @@ systemctl --user stop hc-bot-x        # stop posting
 
 Don't also run `python main_x.py` in a terminal while the service is running — that's two bots.
 
+### Dashboard
+
+A password-protected status page on GitHub Pages (repo `hellomarcog/hc-bot-dashboard`, public; the page is `dashboard/index.html`, the builder is `src/dashboard.py`). Every 15 minutes `deploy/hc-bot-dashboard.timer` builds a snapshot from `logs/x_posts.jsonl`, systemd, and config, **encrypts it with `DASHBOARD_PASSWORD` from `.env`** (AES-256-GCM, PBKDF2-SHA256), and force-pushes it as the dashboard repo's single commit. The page decrypts in the browser. Never put keys, `.env` contents, or anything unencrypted besides the page shell into that repo. View-only by design: no controls.
+
 ## Working conventions
 
 - Don't add platforms, subreddits, or accounts to the active scope without the user explicitly naming them — scope grows by instruction, not by assumption.

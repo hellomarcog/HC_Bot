@@ -1,0 +1,12 @@
+# Rebuilds and pushes the encrypted dashboard once. Run on a schedule by hc-bot-dashboard.timer.
+# Install (see CLAUDE.md "Dashboard"):
+#   cp deploy/hc-bot-dashboard.service deploy/hc-bot-dashboard.timer ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now hc-bot-dashboard.timer
+[Unit]
+Description=HC_Bot dashboard update (encrypted, GitHub Pages)
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/marcogiampaolo/Projects/HC_Bot
+ExecStart=/home/marcogiampaolo/Projects/HC_Bot/.venv/bin/python -m src.dashboard

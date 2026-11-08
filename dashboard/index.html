@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Bot Monitor</title>
+<!--
+  Status dashboard for the HC_Bot X account. data.json is encrypted (AES-256-GCM, key from
+  PBKDF2-SHA256 over the password); this page decrypts it in the browser. Nothing readable is
+  published without the password. Built by src/dashboard.py in the HC_Bot repo.
+-->
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e4e2dc;
+    --accent: #c2410c; --ok: #15803d; --warn: #b45309; --bad: #b91c1c; --bar: #c2410c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141413; --card: #1e1e1c; --ink: #ecebe6; --muted: #9c9a93; --line: #2f2f2c;
+      --accent: #fb923c; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --bar: #fb923c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141413; --card: #1e1e1c; --ink: #ecebe6; --muted: #9c9a93; --line: #2f2f2c;
+    --accent: #fb923c; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --bar: #fb923c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 20px; margin: 0; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+    margin: 0 0 10px; font-weight: 600; }
+  a { color: var(--accent); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px; margin-top: 14px; }
+  .muted { color: var(--muted); }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px;
+    font-size: 13px; font-weight: 600; border: 1px solid currentColor; }
+  .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .stat { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 13px; color: var(--muted); }
+  ul.list { list-style: none; margin: 0; padding: 0; }
+  ul.list li { padding: 10px 0; border-top: 1px solid var(--line); }
+  ul.list li:first-child { border-top: 0; padding-top: 0; }
+  .meta { font-size: 13px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
+  .tag { font-size: 12px; padding: 1px 8px; border-radius: 99px; background: var(--line); color: var(--ink); }
+  .bars { display: flex; align-items: flex-end; gap: 3px; height: 90px; }
+  .bars div { flex: 1; background: var(--bar); border-radius: 2px 2px 0 0; min-height: 2px; opacity: .85; }
+  .bars div.zero { background: var(--line); }
+  .axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .topic { display: grid; grid-template-columns: 110px 1fr 28px; gap: 8px; align-items: center; margin: 4px 0; font-size: 14px; }
+  .topic .track { background: var(--line); border-radius: 4px; height: 10px; }
+  .topic .fill { background: var(--bar); height: 10px; border-radius: 4px; }
+  form { max-width: 360px; margin: 18vh auto 0; }
+  input[type=password] { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); font-size: 16px; margin: 10px 0; }
+  button { padding: 9px 14px; border-radius: 8px; border: 0; background: var(--accent); color: #fff;
+    font-weight: 600; font-size: 15px; cursor: pointer; }
+  button.link { background: none; color: var(--muted); padding: 0; font-weight: 400; font-size: 13px; text-decoration: underline; }
+  .error { color: var(--bad); font-size: 14px; min-height: 20px; }
+  .banner { border-color: var(--bad); color: var(--bad); font-weight: 600; }
+  .post-text { margin: 4px 0; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<main>
+  <form id="login" hidden>
+    <h1>Bot Monitor</h1>
+    <p class="muted">Enter the dashboard password.</p>
+    <input id="pw" type="password" autocomplete="current-password" autofocus>
+    <label class="muted"><input id="remember" type="checkbox"> Remember on this device</label>
+    <p class="error" id="err"></p>
+    <button type="submit">Unlock</button>
+  </form>
+  <div id="app" hidden></div>
+</main>
+<script>
+const STORE_KEY = "hcbot-dashboard-pw";
+const STALE_MIN = 30;  // the snapshot is rebuilt every 15 min; older than this = something's wrong
+let password = null;
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+function store(fn) { try { return fn(localStorage); } catch { return null; } }
+
+async function decrypt(blob, pw) {
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey(
+    { name: "PBKDF2", hash: "SHA-256", salt: b64(blob.salt), iterations: blob.iterations },
+    base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(blob.iv) }, key, b64(blob.data));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
+async function load(pw) {
+  const res = await fetch("data.json?t=" + Date.now(), { cache: "no-store" });
+  if (!res.ok) throw new Error("Couldn't load data.json (" + res.status + ")");
+  return decrypt(await res.json(), pw);
+}
+
+function fmtTime(s) {
+  const d = new Date(s);
+  return isNaN(d) ? s : d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+function ago(ms) {
+  const m = Math.round(ms / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return m + " min ago";
+  const h = Math.round(m / 60);
+  return h < 48 ? h + " h ago" : Math.round(h / 24) + " days ago";
+}
+// Plain-words reasons for the most common problems.
+function explain(reason) {
+  const r = reason.toLowerCase();
+  if (r.includes("name resolution") || r.includes("connection")) return "Network down — couldn't reach the API";
+  if (r.includes("402") || r.includes("credits")) return "X API out of credits";
+  if (r.includes("429")) return "X rate limit";
+  if (r.includes("image failed")) return "Image generation failed";
+  if (r.includes("blocked word")) return "Blocked word in generated text";
+  if (r.includes("too similar")) return "Too similar to a recent post";
+  if (r.includes("missed")) return "Missed slot — computer asleep or off";
+  return null;
+}
+
+function render(d) {
+  const ageMs = Date.now() - new Date(d.generated_at);
+  const stale = ageMs > STALE_MIN * 60000;
+  const running = d.service.state === "active";
+  const next = d.today.plan.find((p) => new Date(p.time) > new Date());
+  const maxDay = Math.max(1, ...d.history.map((h) => h.posts));
+  const maxTopic = Math.max(1, ...d.topics.map((t) => t[1]));
+  const status = !running ? ["bad", "Bot stopped (" + esc(d.service.state) + ")"]
+    : !d.network_ok ? ["warn", "Running — network down"]
+    : ["ok", "Running"];
+
+  $("app").innerHTML = `
+    <div class="row">
+      <h1>@${esc(d.handle)} monitor</h1>
+      <button class="link" id="lock">Lock</button>
+    </div>
+    ${stale ? `<div class="card banner">No update for ${ago(ageMs).replace(" ago", "")}. The desktop may be off, asleep, or offline — the info below is from ${fmtTime(d.generated_at)}.</div>` : ""}
+    <div class="card">
+      <div class="row">
+        <span class="pill ${status[0]}">${status[1]}</span>
+        <span class="muted">Updated ${ago(ageMs)}</span>
+      </div>
+      <p class="meta" style="margin:10px 0 0">
+        <span>Up since ${esc(d.service.since || "?")}</span>
+        <span>· Crashes (7 days): <b class="${d.service.crashes_7d ? "warn" : ""}">${d.service.crashes_7d}</b></span>
+      </p>
+    </div>
+    <div class="card">
+      <h2>Today</h2>
+      <div class="stats">
+        <div class="stat"><b>${d.today.posted} / ${d.today.cap}</b><span>posts / daily cap</span></div>
+        <div class="stat"><b>${next ? fmtTime(next.time).split(", ").pop() : "—"}</b><span>${next ? "next post" + (next.topic ? " (" + esc(next.topic) + ")" : "") : "no more posts today"}</span></div>
+        <div class="stat"><b>${d.today.plan.length}</b><span>planned today</span></div>
+      </div>
+      <p class="meta" style="margin:10px 0 0">Plan: ${d.today.plan.length ? d.today.plan.map((p) => esc(fmtTime(p.time).split(", ").pop()) + (p.topic ? " (" + esc(p.topic) + ")" : "")).join(", ") : "no posts planned (skip day, or restarted after posting)"}</p>
+    </div>
+    <div class="card">
+      <h2>${esc(d.month.label)}</h2>
+      <div class="stats">
+        <div class="stat"><b>${d.month.posts}</b><span>posts</span></div>
+        <div class="stat"><b>${d.month.photos}</b><span>photo posts</span></div>
+        <div class="stat"><b class="${d.month.problems ? "warn" : ""}">${d.month.problems}</b><span>failed / skipped</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Posts per day — last ${d.history.length} days</h2>
+      <div class="bars">${d.history.map((h) => `<div class="${h.posts ? "" : "zero"}" style="height:${h.posts ? (h.posts / maxDay) * 100 : 3}%" title="${esc(h.date)}: ${h.posts}"></div>`).join("")}</div>
+      <div class="axis"><span>${esc(d.history[0]?.date)}</span><span>today</span></div>
+    </div>
+    <div class="card">
+      <h2>Topics — last 30 days</h2>
+      ${d.topics.length ? d.topics.map(([t, n]) => `<div class="topic"><span>${esc(t)}</span><div class="track"><div class="fill" style="width:${(n / maxTopic) * 100}%"></div></div><span class="muted">${n}</span></div>`).join("") : '<p class="muted">No posts yet.</p>'}
+    </div>
+    <div class="card">
+      <h2>Problems</h2>
+      ${d.problems.length ? `<ul class="list">${d.problems.map((p) => {
+        const plain = explain(p.reason);
+        return `<li><div class="meta"><span class="tag">${esc(p.kind)}</span><span>${esc(fmtTime(p.time))}</span></div>
+          ${plain ? `<div class="post-text"><b>${esc(plain)}</b></div>` : ""}
+          <div class="post-text muted" style="font-size:13px">${esc(p.reason)}</div></li>`;
+      }).join("")}</ul>` : '<p class="muted">None.</p>'}
+    </div>
+    <div class="card">
+      <h2>Recent posts</h2>
+      ${d.posts.length ? `<ul class="list">${d.posts.map((p) => `
+        <li><div class="meta"><span>${esc(fmtTime(p.time))}</span><span class="tag">${esc(p.photo ? "📷 " + p.topic : p.topic)}</span>
+          ${p.id ? `<a href="https://x.com/${esc(d.handle)}/status/${esc(p.id)}" target="_blank" rel="noopener">view on X</a>` : ""}</div>
+          <div class="post-text">${esc(p.text)}</div></li>`).join("")}</ul>` : '<p class="muted">No posts yet.</p>'}
+    </div>`;
+  $("lock").onclick = () => { store((s) => s.removeItem(STORE_KEY)); location.reload(); };
+}
+
+async function unlock(pw, remember) {
+  const data = await load(pw);  // throws on a wrong password
+  password = pw;
+  if (remember) store((s) => s.setItem(STORE_KEY, pw));
+  $("login").hidden = true;
+  $("app").hidden = false;
+  render(data);
+}
+
+$("login").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("err").textContent = "Unlocking…";
+  try { await unlock($("pw").value, $("remember").checked); }
+  catch (err) { $("err").textContent = err.message.startsWith("Couldn't") ? err.message : "Wrong password."; }
+});
+
+// Refresh every 5 minutes while open.
+setInterval(async () => {
+  if (!password) return;
+  try { render(await load(password)); } catch { /* keep showing the last good data */ }
+}, 5 * 60000);
+
+(async () => {
+  const saved = store((s) => s.getItem(STORE_KEY));
+  if (saved) {
+    try { await unlock(saved, false); return; } catch { store((s) => s.removeItem(STORE_KEY)); }
+  }
+  $("login").hidden = false;
+})();
+</script>
+</body>
+</html>
