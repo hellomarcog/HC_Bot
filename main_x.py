@@ -28,7 +28,7 @@ from zoneinfo import ZoneInfo
 
 import yaml
 
-from src import decide, generate, state
+from src import control, decide, generate, state
 
 CONFIG_PATH = "config/config.yaml"
 POST_LOG = Path("logs/x_posts.jsonl")
@@ -38,6 +38,7 @@ LENGTH_WEIGHTS = {"short": 3, "medium": 4, "long": 2}
 MAX_LATENESS = timedelta(minutes=30)  # skip a slot rather than post this long after it
 RETRIES = 3  # attempts per slot when an API can't be reached (e.g. Wi-Fi/DNS drops)
 RETRY_DELAY = timedelta(minutes=5)
+POLL_SECONDS = 30  # how often the loop checks for Telegram commands (src/control.py)
 
 
 def load_config() -> dict:
@@ -105,11 +106,26 @@ def _rejection(text: str, recent: list[str], config: dict) -> str | None:
     return None
 
 
+def _with_hint(prompt: str, hint: str | None) -> str:
+    """Adds the owner's guidance from Telegram (/next) to a topic prompt."""
+    if not hint:
+        return prompt
+    return (
+        f"{prompt}\n\nThe account owner asked for this post to work in: {hint}\n"
+        "Make it yours — your voice and opinions, not a quote of this note. Only state facts you're sure of."
+    )
+
+
 def make_post(
-    config: dict, recent: list[str], last_topic: str | None = None, topic_name: str | None = None
+    config: dict,
+    recent: list[str],
+    last_topic: str | None = None,
+    topic_name: str | None = None,
+    hint: str | None = None,
 ) -> tuple[str, str] | tuple[None, str]:
     """Returns (post text with hashtags, topic name), or (None, reason) if nothing usable.
-    `topic_name` forces a topic; otherwise one is picked at random (never a scheduled_only one)."""
+    `topic_name` forces a topic; otherwise one is picked at random (never a scheduled_only one).
+    `hint` is the owner's guidance from Telegram, if any."""
     x_cfg = config["platforms"]["x"]
     posts_cfg = x_cfg["posts"]
     if topic_name:
@@ -125,7 +141,7 @@ def make_post(
     suffix = (" " + " ".join(tags)) if tags else ""
     length = random.choices(list(LENGTH_WEIGHTS), weights=list(LENGTH_WEIGHTS.values()))[0]
     budget = x_cfg["max_reply_chars"] - len(suffix)
-    body = generate.generate_post("X (Twitter)", topic["prompt"], budget, recent, length)
+    body = generate.generate_post("X (Twitter)", _with_hint(topic["prompt"], hint), budget, recent, length)
     if body is None:
         return None, f"{topic['name']}: no usable text (refused, empty, or too long)"
     reason = _rejection(body, recent, config)
@@ -142,7 +158,9 @@ def selfies_ready(selfie_cfg: dict) -> bool:
     )
 
 
-def make_selfie_post(config: dict, recent: list[str], scene_name: str | None = None) -> tuple[dict | None, str]:
+def make_selfie_post(
+    config: dict, recent: list[str], scene_name: str | None = None, hint: str | None = None
+) -> tuple[dict | None, str]:
     """Caption + image for a selfie post. Returns ({text, topic, image, alt}, "") or (None, reason).
     The caption is made and checked first, so a rejected caption doesn't cost an image."""
     from src import images  # imported here so text-only runs don't need the OpenAI SDK/key
@@ -167,7 +185,7 @@ def make_selfie_post(config: dict, recent: list[str], scene_name: str | None = N
         f" {scene['image_prompt']}. Don't describe the photo; react to the moment."
     )
     length = random.choice(["short", "medium"])  # captions stay brief
-    body = generate.generate_post("X (Twitter)", topic, budget, recent, length)
+    body = generate.generate_post("X (Twitter)", _with_hint(topic, hint), budget, recent, length)
     if body is None:
         return None, f"selfie {scene['name']}: no usable caption"
     reason = _rejection(body, recent, config)
@@ -216,27 +234,40 @@ def post_once(
     posts_cfg = config["platforms"]["x"]["posts"]
     if state.daily_post_count("x") >= posts_cfg["daily_post_cap"]:
         print("daily post cap reached")
+        _log({"posted": False, "skipped": "daily post cap reached"})
         return None
     recent = state.recent_posts("x")
+    hint = control.hint()
     selfie_cfg = posts_cfg.get("selfies", {})
     photo_scene = None
     if topic and topic.split(":")[0].strip() == "photo":
         photo_scene, topic = topic.partition(":")[2].strip(), None
     roll_selfie = topic is None and selfies_ready(selfie_cfg) and random.random() < selfie_cfg["chance"]
     if selfie_scene is not None or photo_scene is not None or roll_selfie:
-        post, reason = make_selfie_post(config, recent, selfie_scene or photo_scene or None)
+        post, reason = make_selfie_post(config, recent, selfie_scene or photo_scene or None, hint)
         if post:
-            return post["topic"] if _publish(post) else None
+            return _published(post, hint)
         print(f"selfie skipped — {reason}")
         _log({"posted": False, "skipped": reason})
         if selfie_scene is not None:
             return None  # asked for a selfie specifically; don't swap in a text post
-    text, topic_or_reason = make_post(config, recent, last_topic, topic)
+    text, topic_or_reason = make_post(config, recent, last_topic, topic, hint)
     if text is None:
         print(f"skipped — {topic_or_reason}")
         _log({"posted": False, "skipped": topic_or_reason})
         return None
-    return topic_or_reason if _publish({"text": text, "topic": topic_or_reason}) else None
+    return _published({"text": text, "topic": topic_or_reason}, hint)
+
+
+def _published(post: dict, hint: str | None) -> str | None:
+    """Publishes; if it went out, counts it against the Telegram hint. Returns the topic or None."""
+    if hint:
+        post["hint"] = hint
+    if not _publish(post):
+        return None
+    if hint:
+        control.used_hint()
+    return post["topic"]
 
 
 def dry_run(config: dict) -> None:
@@ -308,28 +339,65 @@ def main() -> None:
     tz = ZoneInfo(posts_cfg["timezone"])
     last_topic = None
     while True:
+        last_topic = run_day(config, tz, last_topic)
+
+
+def run_day(config: dict, tz: ZoneInfo, last_topic: str | None) -> str | None:
+    """Plans today, then posts at each slot — checking every POLL_SECONDS for Telegram commands
+    (post now, added slots, skip, pause) — until a random few minutes after midnight."""
+    posts_cfg = config["platforms"]["x"]["posts"]
+    now = datetime.now(tz)
+    day = now.date()
+    # Plan today; times already past (e.g. after a restart) are dropped, not made up.
+    plan = special_day(posts_cfg, day)
+    if plan is None:
+        plan = [(t, None) for t in plan_day(posts_cfg, day)]
+    plan = [(t, topic) for t, topic in plan if t > now]
+    if state.daily_post_count("x") > 0:
+        plan = []  # restarted on a day that already has a post (e.g. a manual one); leave it there
+    _announce_plan(day, plan)
+    day_end = datetime.combine(day + timedelta(days=1), datetime.min.time(), tz)
+    day_end += timedelta(seconds=random.uniform(60, 1800))
+    while datetime.now(tz) < day_end:
+        added = control.take_slots(day.isoformat())
+        for slot in added:
+            when = datetime.combine(day, datetime.strptime(slot["time"], "%H:%M").time(), tz)
+            plan.append((when, slot["topic"]))
+        if added:
+            plan.sort(key=lambda p: p[0])
+            _announce_plan(day, plan)
+        fresh, expired = control.take_post_requests()
+        for req in expired:
+            _log({"posted": False, "skipped": f"post-now request from {req['requested']} expired"})
+        for req in fresh:
+            print(f"post now (Telegram): {req['topic'] or 'any topic'}")
+            last_topic = _post_with_retry(config, last_topic, req["topic"]) or last_topic
         now = datetime.now(tz)
-        # Plan today; times already past (e.g. after a restart) are dropped, not made up.
-        plan = special_day(posts_cfg, now.date())
-        if plan is None:
-            plan = [(t, None) for t in plan_day(posts_cfg, now.date())]
-        plan = [(t, topic) for t, topic in plan if t > now]
-        if state.daily_post_count("x") > 0:
-            plan = []  # restarted on a day that already has a post (e.g. a manual one); leave it there
-        print(f"{now:%a %b %d}: " + (", ".join(f"{t:%-I:%M %p}" + (f" ({topic})" if topic else "") for t, topic in plan) or "no posts"))
-        _log({"plan": [[t.isoformat(timespec="minutes"), topic] for t, topic in plan]})
-        for when, topic in plan:
-            _sleep_until(when, tz)
-            late = datetime.now(tz) - when
+        while plan and plan[0][0] <= now:
+            when, topic = plan.pop(0)
+            late = now - when
             if late > MAX_LATENESS:
                 # Computer was asleep/suspended past the slot; don't post at an odd hour.
                 print(f"skipped {when:%-I:%M %p} slot — {late} late (computer asleep?)")
                 _log({"posted": False, "skipped": f"missed {when.isoformat(timespec='minutes')} slot, {late} late"})
-                continue
-            last_topic = _post_with_retry(config, last_topic, topic) or last_topic
-        # Wait until a random few minutes after midnight, then plan the next day.
-        tomorrow = datetime.combine(now.date() + timedelta(days=1), datetime.min.time(), tz)
-        _sleep_until(tomorrow + timedelta(seconds=random.uniform(60, 1800)), tz)
+            elif control.read()["paused"]:
+                print(f"skipped {when:%-I:%M %p} slot — paused")
+                _log({"posted": False, "skipped": f"{when:%-I:%M %p} slot: posting paused"})
+            elif control.take_skip():
+                print(f"skipped {when:%-I:%M %p} slot — skip requested")
+                _log({"posted": False, "skipped": f"{when:%-I:%M %p} slot: skipped by request"})
+            else:
+                last_topic = _post_with_retry(config, last_topic, topic) or last_topic
+            now = datetime.now(tz)
+        # Short sleeps against the wall clock: a long time.sleep() doesn't count time the computer
+        # spends suspended, and commands should be picked up quickly.
+        time.sleep(POLL_SECONDS)
+    return last_topic
+
+
+def _announce_plan(day: date, plan: list[tuple[datetime, str | None]]) -> None:
+    print(f"{day:%a %b %d}: " + (", ".join(f"{t:%-I:%M %p}" + (f" ({topic})" if topic else "") for t, topic in plan) or "no posts"))
+    _log({"plan": [[t.isoformat(timespec="minutes"), topic] for t, topic in plan]})
 
 
 def _post_with_retry(config: dict, last_topic: str | None, topic: str | None) -> str | None:
@@ -344,13 +412,6 @@ def _post_with_retry(config: dict, last_topic: str | None, topic: str | None) ->
             if attempt < RETRIES:
                 time.sleep(RETRY_DELAY.total_seconds())
     return None
-
-
-def _sleep_until(when: datetime, tz: ZoneInfo) -> None:
-    """Sleep in short steps against the wall clock. One long time.sleep() doesn't count time the
-    computer spends suspended, so after waking it would oversleep by however long it was asleep."""
-    while (remaining := (when - datetime.now(tz)).total_seconds()) > 0:
-        time.sleep(min(remaining, 60))
 
 
 if __name__ == "__main__":

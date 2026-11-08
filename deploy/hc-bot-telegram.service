@@ -1,0 +1,16 @@
+# systemd user service for the private Telegram remote (src/telegram_bot.py). Install once
+# TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are in .env:
+#   cp deploy/hc-bot-telegram.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now hc-bot-telegram.service
+[Unit]
+Description=HC_Bot Telegram remote (status, commands, alerts)
+After=network-online.target
+
+[Service]
+WorkingDirectory=/home/marcogiampaolo/Projects/HC_Bot
+ExecStart=/home/marcogiampaolo/Projects/HC_Bot/.venv/bin/python -u -m src.telegram_bot
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=default.target

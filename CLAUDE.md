@@ -73,6 +73,10 @@ Don't also run `python main_x.py` in a terminal while the service is running —
 
 A password-protected status page on GitHub Pages (repo `hellomarcog/hc-bot-dashboard`, public; the page is `dashboard/index.html`, the builder is `src/dashboard.py`). Every 15 minutes `deploy/hc-bot-dashboard.timer` builds a snapshot from `logs/x_posts.jsonl`, systemd, and config, **encrypts it with `DASHBOARD_PASSWORD` from `.env`** (AES-256-GCM, PBKDF2-SHA256), and force-pushes it as the dashboard repo's single commit. The page decrypts in the browser. Never put keys, `.env` contents, or anything unencrypted besides the page shell into that repo. View-only by design: no controls.
 
+### Telegram remote
+
+A private Telegram bot (`src/telegram_bot.py`, service `deploy/hc-bot-telegram.service`) for status, commands, and alerts. It answers only `TELEGRAM_CHAT_ID` and silently ignores everyone else. Info commands (`/status`, `/today`, `/posts`, `/problems`, `/stats`) reuse `dashboard.build_snapshot()`. Control commands (`/post`, `/next`, `/add`, `/skip`, `/pause`, `/resume`) go through `src/control.py` (`data/control.json`, file-locked); `main_x.py` checks it every 30 s. **Commands never bypass the daily cap or content checks** — every post, however triggered, goes through `post_once`. `/next` guidance is screened for blocked words and only steers generation; it's never posted verbatim. Alerts: each new posted/failed/skipped entry in `logs/x_posts.jsonl`, and changes in the `hc-bot-x` service state.
+
 ## Working conventions
 
 - Don't add platforms, subreddits, or accounts to the active scope without the user explicitly naming them — scope grows by instruction, not by assumption.
