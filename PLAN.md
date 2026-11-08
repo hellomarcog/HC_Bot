@@ -55,3 +55,11 @@ State (`data/state.json`), saved browser sessions (`data/*_storage_state.json`),
 - **X mention replies** (reply only to people who mention the bot or reply to its posts): needs X's written approval for AI reply bots — request via the X developer forum (Rules and Policies), describing the opt-in, opt-out, caps and filters. Then read mentions via the API, never the browser.
 - **Polls** via the API (e.g. "best NYHC record of the 80s?") for engagement.
 - **A model-based topic check** (politics/tragedy/death) in addition to the blocked-words list, which can't catch everything.
+
+## Next session (as of 2026-11-07)
+
+- **Tune the persona** (`persona/system_prompt.md`): the user wants to add backstory and personality detail — hometown, scene history, job/family, favorite and hated bands, hummus rules, favorite Golden Girl, slang/catchphrases, soft spots. Then run `python main_x.py --dry-run` so they can hear him before it goes live.
+- Running now: X posting loop (`hc-bot-x`), Telegram remote (`hc-bot-telegram`, @HCBot_Controller_Bot), dashboard timer (`hc-bot-dashboard.timer` → hellomarcog.github.io/hc-bot-dashboard). Cost tracking started 2026-11-07.
+- Check the X per-post price in `costs:` against the real X bill after a few posts.
+- Auto-replies stay off until X publishes the pay-per-use approval route (devcommunity.x.com topic 277749).
+- Leftovers: delete untracked `src/import_firefox_session.py` and `data/x_storage_state.json` (old X login cookies).
