@@ -135,6 +135,23 @@ keywords:
     - empty nest
     - golden palace
 
+# Prices (USD) for the cost estimates on the dashboard and Telegram /stats — estimates only; the
+# real bills are in console.anthropic.com, platform.openai.com, and console.x.com. Recorded per
+# call in logs/usage.jsonl by src/usage.py. Last checked 2026-11-07.
+costs:
+  claude:  # per 1M tokens, Claude Sonnet 5.5 (thinking tokens bill as output)
+    input: 2.00
+    output: 10.00
+    cache_write: 2.50
+    cache_read: 0.20
+  openai_image:  # per 1M tokens, gpt-image-2.5-flare / -sunburst
+    text_input: 5.00
+    image_input: 8.00
+    image_output: 30.00
+  x:  # per request, pay-per-use (third-party figures; check console.x.com billing)
+    post: 0.015
+    media_upload: 0.0  # not listed anywhere; set this if your X bill shows a charge
+
 guardrails:
   no_private_individuals: true
   avoid_topics:

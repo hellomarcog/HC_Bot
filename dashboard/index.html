@@ -99,6 +99,8 @@ async function load(pw) {
   return decrypt(await res.json(), pw);
 }
 
+const SERVICE_NAMES = { claude: "Claude", openai_image: "OpenAI images", x: "X API" };
+function money(v) { return "$" + (v < 1 ? v.toFixed(3) : v.toFixed(2)); }
 function fmtTime(s) {
   const d = new Date(s);
   return isNaN(d) ? s : d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -167,6 +169,16 @@ function render(d) {
         <div class="stat"><b class="${d.month.problems ? "warn" : ""}">${d.month.problems}</b><span>failed / skipped</span></div>
       </div>
     </div>
+    ${d.costs ? `<div class="card">
+      <h2>Estimated cost</h2>
+      <div class="stats">
+        <div class="stat"><b>${money(d.costs.month)}</b><span>${esc(d.month.label)}</span></div>
+        <div class="stat"><b>${money(d.costs.today)}</b><span>today</span></div>
+        <div class="stat"><b>${d.costs.per_post == null ? "—" : money(d.costs.per_post)}</b><span>per post (this month)</span></div>
+      </div>
+      <p class="meta" style="margin:10px 0 0">${Object.entries(d.costs.month_by_service).map(([k, v]) => esc(SERVICE_NAMES[k] || k) + " " + money(v)).join(" · ") || "No paid calls this month yet."}
+        ${d.costs.since ? " · tracked since " + esc(d.costs.since) : ""} · estimates; real bills are in each provider's console</p>
+    </div>` : ""}
     <div class="card">
       <h2>Posts per day — last ${d.history.length} days</h2>
       <div class="bars">${d.history.map((h) => `<div class="${h.posts ? "" : "zero"}" style="height:${h.posts ? (h.posts / maxDay) * 100 : 3}%" title="${esc(h.date)}: ${h.posts}"></div>`).join("")}</div>

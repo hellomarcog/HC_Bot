@@ -9,6 +9,8 @@ import tweepy
 from dotenv import load_dotenv
 from requests_oauthlib import OAuth1
 
+from src import usage
+
 load_dotenv()
 
 _client = tweepy.Client(
@@ -25,7 +27,9 @@ def post_reply(tweet_id: str, reply_text: str) -> None:
 
 def post(text: str, media_ids: list[str] | None = None) -> str:
     """Publishes an original post (optionally with uploaded images); returns its id."""
-    return str(_client.create_tweet(text=text, media_ids=media_ids).data["id"])
+    post_id = str(_client.create_tweet(text=text, media_ids=media_ids).data["id"])
+    usage.record_x("post")
+    return post_id
 
 
 # Tweepy's media upload uses the old v1.1 endpoint, so images go to the v2 endpoint directly,
@@ -51,6 +55,7 @@ def upload_image(path: str, alt_text: str | None = None) -> str:
     if not r.ok:
         raise tweepy.TweepyException(f"media upload failed: {r.status_code} {r.text}")
     media_id = r.json()["data"]["id"]
+    usage.record_x("media_upload")
     if alt_text:
         m = requests.post(
             "https://api.x.com/2/media/metadata",

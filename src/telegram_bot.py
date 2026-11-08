@@ -151,6 +151,7 @@ def cmd_status(chat_id: int, _args: str) -> None:
         f"Today: {s['today']['posted']}/{s['today']['cap']} posts · next: "
         + (f"{_t(next_slot['time'])}" + (f" ({_esc(next_slot['topic'])})" if next_slot["topic"] else "") if next_slot else "none"),
         f"Last post: {_ago(last['time'])} ({_esc(last['topic'] or '')})" if last else "Last post: none yet",
+        f"Est. cost today: {_money(s['costs']['today'])} · month: {_money(s['costs']['month'])}",
     ]
     send(chat_id, "\n".join(lines))
 
@@ -198,11 +199,25 @@ def cmd_problems(chat_id: int, _args: str) -> None:
     send(chat_id, "\n".join(lines))
 
 
+SERVICE_NAMES = {"claude": "Claude", "openai_image": "OpenAI images", "x": "X API"}
+
+
+def _money(v: float) -> str:
+    return f"${v:.3f}" if v < 1 else f"${v:.2f}"
+
+
+def _cost_lines(c: dict) -> list[str]:
+    by = " · ".join(f"{SERVICE_NAMES.get(k, k)} {_money(v)}" for k, v in c["month_by_service"].items())
+    per = f" · {_money(c['per_post'])}/post" if c["per_post"] is not None else ""
+    return [f"<b>Est. cost</b>: {_money(c['month'])} this month · {_money(c['today'])} today{per}",
+            by or "No paid calls this month yet."]
+
+
 def cmd_stats(chat_id: int, _args: str) -> None:
     s = dashboard.build_snapshot()
     m = s["month"]
     lines = [f"<b>{m['label']}</b>: {m['posts']} posts ({m['photos']} photo) · {m['problems']} failed/skipped",
-             "", "<b>Last 7 days</b>"]
+             *_cost_lines(s["costs"]), "", "<b>Last 7 days</b>"]
     for h in s["history"][-7:]:
         day = datetime.fromisoformat(h["date"]).strftime("%a %-d")
         lines.append(f"<code>{day:<7}</code> {'▇' * h['posts'] or '·'} {h['posts']}")

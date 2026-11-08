@@ -6,6 +6,8 @@ from pathlib import Path
 import anthropic
 from dotenv import load_dotenv
 
+from src import usage
+
 load_dotenv()
 
 PERSONA_PATH = Path(__file__).resolve().parent.parent / "persona" / "system_prompt.md"
@@ -67,6 +69,7 @@ def _complete(user_content: str, effort: str, max_chars: int | None) -> str | No
         system=_persona,
         messages=[{"role": "user", "content": user_content}],
     )
+    usage.record_claude(response.model, response.usage)  # every call costs, even dropped ones
     if response.stop_reason != "end_turn":  # refusal or cut off — don't post partial text
         print(f"generate: dropped, stop_reason={response.stop_reason} {response.stop_details or ''}")
         return None

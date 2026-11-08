@@ -27,6 +27,8 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from dotenv import load_dotenv
 
+from src import usage
+
 ROOT = Path(__file__).resolve().parent.parent
 POST_LOG = ROOT / "logs" / "x_posts.jsonl"
 CONFIG_PATH = ROOT / "config" / "config.yaml"
@@ -92,6 +94,28 @@ def _plan_for(entries: list[dict], day: date) -> list[dict]:
     return slots
 
 
+def _costs(posted: list[dict], today: date) -> dict:
+    """Estimated spend from logs/usage.jsonl (today, this month by service, per post)."""
+    calls = usage.entries()
+    month = today.strftime("%Y-%m")
+    by_service = Counter()
+    for c in calls:
+        if c["time"].startswith(month):
+            by_service[c["service"]] += c.get("cost", 0)
+    # Only posts made since tracking began, or the average is diluted by untracked older posts.
+    tracked_from = calls[0]["time"] if calls else "9999"
+    month_posts = sum(1 for e in posted if e["time"].startswith(month) and e["time"] >= tracked_from)
+    month_total = sum(by_service.values())
+    return {
+        "since": calls[0]["time"][:10] if calls else None,
+        "today": round(sum(c.get("cost", 0) for c in calls if c["time"].startswith(today.isoformat())), 4),
+        "month": round(month_total, 4),
+        "month_by_service": {k: round(v, 4) for k, v in by_service.most_common()},
+        # per post counts every call that month, including generations that were dropped
+        "per_post": round(month_total / month_posts, 4) if month_posts else None,
+    }
+
+
 def build_snapshot() -> dict:
     config = yaml.safe_load(CONFIG_PATH.read_text())
     posts_cfg = config["platforms"]["x"]["posts"]
@@ -133,6 +157,7 @@ def build_snapshot() -> dict:
              "reason": (e.get("failed") or e.get("skipped") or "")[:300]}
             for e in reversed(problems[-20:])
         ],
+        "costs": _costs(posted, today),
         "history": [{"date": d, "posts": per_day.get(d, 0)} for d in days],
         "topics": topics.most_common(),
         "month": {

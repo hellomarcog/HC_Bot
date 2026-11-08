@@ -13,6 +13,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from src import usage
+
 load_dotenv()
 
 # Added to every image prompt.
@@ -31,7 +33,8 @@ def _openai() -> OpenAI:
     return _client
 
 
-def _save(response, out_path: Path) -> Path:
+def _save(response, out_path: Path, model: str) -> Path:
+    usage.record_image(model, response.usage)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_bytes(base64.b64decode(response.data[0].b64_json))
     return out_path
@@ -46,7 +49,7 @@ def make_reference(cfg: dict, out_path: Path) -> Path:
     response = _openai().images.generate(
         model=cfg["model"], prompt=prompt, size=cfg["size"], quality=cfg["quality"], output_format="jpeg"
     )
-    return _save(response, out_path)
+    return _save(response, out_path, cfg["model"])
 
 
 def make_selfie(cfg: dict, scene_prompt: str, out_path: Path, pov: bool = False) -> Path:
@@ -60,7 +63,7 @@ def make_selfie(cfg: dict, scene_prompt: str, out_path: Path, pov: bool = False)
         response = _openai().images.generate(
             model=cfg["model"], prompt=prompt, size=cfg["size"], quality=cfg["quality"], output_format="jpeg"
         )
-        return _save(response, out_path)
+        return _save(response, out_path, cfg["model"])
     prompt = (
         f"Photorealistic phone selfie of the man in the reference photo — same face, same person —"
         f" {scene_prompt}. He is {cfg['character']}." + STYLE_RULES
@@ -74,4 +77,4 @@ def make_selfie(cfg: dict, scene_prompt: str, out_path: Path, pov: bool = False)
             quality=cfg["quality"],
             output_format="jpeg",
         )
-    return _save(response, out_path)
+    return _save(response, out_path, cfg["model"])
