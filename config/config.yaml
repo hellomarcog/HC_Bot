@@ -68,13 +68,14 @@ platforms:
           # No #Halloween: it trends on the day, and automated posts on trending topics break X rules.
           hashtags: ["#hxc", "#horrorpunk"]
       # Fixed post times for specific dates (replaces the random plan that day; cap still
-      # applies). topic: a topic name from above, or leave it out for a random one.
+      # applies). topic: a topic name from above, "photo" (random photo scene) or
+      # "photo: <scene name>", or leave it out for a random one.
       special_days:
         "2026-10-31":
           - {time: "10:17"}
           - {time: "15:42", topic: halloween}
-        "2026-11-07":  # keep tonight's slot across the restart for the retry fix
-          - {time: "22:27"}
+        "2026-11-07":  # keep tonight's slot across the restart; make it a photo post
+          - {time: "22:27", topic: photo}
       # Photo posts: an AI-generated "selfie" of the character plus a caption (src/images.py).
       # Each scheduled post has `chance` of being a selfie instead of text-only (if the reference
       # image exists and OPENAI_API_KEY is set). Selfies count toward daily_post_cap like any post.

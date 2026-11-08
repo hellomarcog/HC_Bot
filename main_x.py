@@ -211,16 +211,20 @@ def post_once(
 ) -> str | None:
     """Makes and publishes one post, unless the daily cap is hit. Returns the topic posted.
     Sometimes (selfies.chance) it's a selfie; `selfie_scene` forces one ("" = any scene).
-    `topic` forces a text post on that topic (special_days)."""
+    `topic` forces a text post on that topic (special_days); "photo" or "photo: <scene>" forces a
+    photo post instead (falls back to text if the image fails)."""
     posts_cfg = config["platforms"]["x"]["posts"]
     if state.daily_post_count("x") >= posts_cfg["daily_post_cap"]:
         print("daily post cap reached")
         return None
     recent = state.recent_posts("x")
     selfie_cfg = posts_cfg.get("selfies", {})
+    photo_scene = None
+    if topic and topic.split(":")[0].strip() == "photo":
+        photo_scene, topic = topic.partition(":")[2].strip(), None
     roll_selfie = topic is None and selfies_ready(selfie_cfg) and random.random() < selfie_cfg["chance"]
-    if selfie_scene is not None or roll_selfie:
-        post, reason = make_selfie_post(config, recent, selfie_scene or None)
+    if selfie_scene is not None or photo_scene is not None or roll_selfie:
+        post, reason = make_selfie_post(config, recent, selfie_scene or photo_scene or None)
         if post:
             return post["topic"] if _publish(post) else None
         print(f"selfie skipped — {reason}")
